@@ -1,0 +1,1 @@
+This is our first update on the README file for the project i started with not knowing a single thing, but here i am practicing on it as i am moving forward, one step at a time.

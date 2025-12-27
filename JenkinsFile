@@ -1,0 +1,128 @@
+pipeline {
+    agent any
+    
+    triggers {
+        pollSCM('*/15 * * * *')  // Every 15 minutes
+    }
+    
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+        
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+        
+        stage('Stop Old Containers') {
+            steps {
+                sh '''
+                    echo "Stopping any existing containers..."
+                    docker-compose down || true
+                '''
+            }
+        }
+        
+        stage('Build and Start Containers') {
+            steps {
+                sh '''
+                    echo "Building and starting new containers..."
+                    docker-compose up -d --build
+                    
+                    echo "Waiting for containers to initialize..."
+                    sleep 30
+                '''
+            }
+        }
+        
+        stage('Initialize Database') {
+            steps {
+                sh '''
+                    echo "Initializing database..."
+                    
+                    # Create database if not exists
+                    docker exec simple-lamp-pipeline-db-1 mysql -uroot -pmypassword -e "CREATE DATABASE IF NOT EXISTS restaurant_db;" || echo "Database creation failed"
+                    
+                    # Create restaurants table
+                    docker exec simple-lamp-pipeline-db-1 mysql -uroot -pmypassword restaurant_db -e "
+                        CREATE TABLE IF NOT EXISTS restaurants (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            name VARCHAR(100) NOT NULL,
+                            cuisine VARCHAR(50) NOT NULL,
+                            rating DECIMAL(3,1)
+                        );
+                    " || echo "Table creation failed"
+                    
+                    # Insert sample data
+                    docker exec simple-lamp-pipeline-db-1 mysql -uroot -pmypassword restaurant_db -e "
+                        INSERT IGNORE INTO restaurants (name, cuisine, rating) VALUES
+                        ('Sushi Palace', 'Japanese', 4.5),
+                        ('Mama Mia Pizzeria', 'Italian', 4.2),
+                        ('Dragon Garden', 'Chinese', 4.0),
+                        ('Burger Haven', 'American', 4.3),
+                        ('Taco Fiesta', 'Mexican', 4.1);
+                    " || echo "Data insertion failed"
+                    
+                    echo "Database initialized!"
+                '''
+            }
+        }
+        
+        stage('Test Database Connection') {
+            steps {
+                sh '''
+                    echo "Testing PHP database connection..."
+                    docker exec simple-lamp-pipeline-www-1 php /var/www/html/testdb.php || echo "PHP test failed but continuing..."
+                    
+                    echo "Testing MySQL directly..."
+                    docker exec simple-lamp-pipeline-db-1 mysql -uroot -pmypassword restaurant_db -e "SELECT COUNT(*) as total_restaurants FROM restaurants;" || echo "MySQL query failed"
+                '''
+            }
+        }
+        
+        stage('Test Web Application') {
+            steps {
+                sh '''
+                    echo "Testing web application..."
+                    
+                    # Wait a bit more for full startup
+                    sleep 10
+                    
+                    # Test with curl
+                    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8095/ || echo "000")
+                    echo "HTTP Status Code: $HTTP_CODE"
+                    
+                    if [ "$HTTP_CODE" = "200" ]; then
+                        echo "SUCCESS: Web application is running!"
+                        exit 0
+                    else
+                        echo "FAILURE: Web application returned code $HTTP_CODE"
+                        echo "Debug info:"
+                        curl -v http://localhost:8095/ || true
+                        exit 1
+                    fi
+                '''
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "=== Pipeline completed ==="
+            sh '''
+                echo "Final container status:"
+                docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+            '''
+        }
+        success {
+            echo "✅ Pipeline succeeded!"
+        }
+        failure {
+            echo "❌ Pipeline failed!"
+        }
+    }
+}

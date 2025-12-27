@@ -75,3 +75,4 @@ $conn->close();
 </body>
 </html>
 
+<-- Insert some sample Fixed typo -->

@@ -1,4 +1,5 @@
 <?php
+//making this comment to test if the automation works
 $servername = "db"; // MySQL container name name inside docker-compose
 $username = "root";
 $password = "mypassword";
@@ -73,3 +74,4 @@ $conn->close();
     <?php } ?>
 </body>
 </html>
+

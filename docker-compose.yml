@@ -8,9 +8,11 @@ services:
     volumes:
       - ./html:/var/www/html
     ports:
-      - "8095:80"
+      - "8096:80"
     depends_on:
       - db
+    networks:
+      - lamp_net
 
   db:
     image: mysql
@@ -18,17 +20,25 @@ services:
     volumes:
       - mysql:/var/lib/mysql
     environment:
-      MYSQL_ROOT_PASSWORD: mypassword # Use environment variable
+      MYSQL_ROOT_PASSWORD: mypassword
+    networks:
+      - lamp_net
 
   phpmyadmin:
     image: phpmyadmin
     restart: always
     ports:
-      - 8090:80
+      - "8090:80"
     depends_on:
       - db
     environment:
       - PMA_ARBITRARY=1
+    networks:
+      - lamp_net
 
 volumes:
   mysql:
+
+networks:
+  lamp_net:
+    driver: bridge

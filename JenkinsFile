@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     triggers {
-        pollSCM('*/15 * * * *')  // Every 15 minutes
+        pollSCM('*/15 * * * *')
     }
     
     stages {
@@ -44,11 +44,10 @@ pipeline {
                 sh '''
                     echo "Initializing database..."
                     
-                    # Create database if not exists
-                    docker exec simple-lamp-pipeline-db-1 mysql -uroot -pmypassword -e "CREATE DATABASE IF NOT EXISTS restaurant_db;" || echo "Database creation failed"
+                    # Use the CORRECT Jenkins-created container
+                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword -e "CREATE DATABASE IF NOT EXISTS restaurant_db;" || echo "Database creation failed"
                     
-                    # Create restaurants table
-                    docker exec simple-lamp-pipeline-db-1 mysql -uroot -pmypassword restaurant_db -e "
+                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword restaurant_db -e "
                         CREATE TABLE IF NOT EXISTS restaurants (
                             id INT AUTO_INCREMENT PRIMARY KEY,
                             name VARCHAR(100) NOT NULL,
@@ -57,8 +56,7 @@ pipeline {
                         );
                     " || echo "Table creation failed"
                     
-                    # Insert sample data
-                    docker exec simple-lamp-pipeline-db-1 mysql -uroot -pmypassword restaurant_db -e "
+                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword restaurant_db -e "
                         INSERT IGNORE INTO restaurants (name, cuisine, rating) VALUES
                         ('Sushi Palace', 'Japanese', 4.5),
                         ('Mama Mia Pizzeria', 'Italian', 4.2),
@@ -76,10 +74,10 @@ pipeline {
             steps {
                 sh '''
                     echo "Testing PHP database connection..."
-                    docker exec simple-lamp-pipeline-www-1 php /var/www/html/testdb.php || echo "PHP test failed but continuing..."
+                    docker exec restaurant-app-ci-www-1 php /var/www/html/testdb.php || echo "PHP test failed but continuing..."
                     
                     echo "Testing MySQL directly..."
-                    docker exec simple-lamp-pipeline-db-1 mysql -uroot -pmypassword restaurant_db -e "SELECT COUNT(*) as total_restaurants FROM restaurants;" || echo "MySQL query failed"
+                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword restaurant_db -e "SELECT COUNT(*) as total_restaurants FROM restaurants;" || echo "MySQL query failed"
                 '''
             }
         }
@@ -89,20 +87,20 @@ pipeline {
                 sh '''
                     echo "Testing web application..."
                     
-                    # Wait a bit more for full startup
                     sleep 10
                     
-                    # Test with curl
-                    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8095/ || echo "000")
+                    # Test on the CORRECT port 8096 (not 8095)
+                    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8096/ || echo "000")
                     echo "HTTP Status Code: $HTTP_CODE"
                     
                     if [ "$HTTP_CODE" = "200" ]; then
-                        echo "SUCCESS: Web application is running!"
+                        echo "✅ SUCCESS: Web application is running on port 8096!"
+                        echo "Access your app at: http://localhost:8096/"
                         exit 0
                     else
-                        echo "FAILURE: Web application returned code $HTTP_CODE"
+                        echo "❌ FAILURE: Web application returned code $HTTP_CODE"
                         echo "Debug info:"
-                        curl -v http://localhost:8095/ || true
+                        curl -v http://localhost:8096/ || true
                         exit 1
                     fi
                 '''

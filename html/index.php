@@ -52,5 +52,6 @@ $conn->close();
     <?php } elseif ($_SERVER["REQUEST_METHOD"] == "POST") { ?>
         <p>No restaurants found for "<?php echo htmlspecialchars($meal); ?>"</p>
     <?php } ?>
+    <p>Test update for CI/CD deployment.</p>
 </body>
 </html>

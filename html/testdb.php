@@ -2,9 +2,9 @@
     $servername = "db";
     $username = "root";
     $password = "password";
-    // Create connection
+    // create connection
     $conn = mysqli_connect($servername, $username, $password);
-    // Check connection
+    // check connection
     if (!$conn) {
         die("Connection failed: " . mysqli_connect_error());
     }

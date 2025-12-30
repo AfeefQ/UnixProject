@@ -2,7 +2,6 @@
 
 cd /home/afeef/UnixProject/Simple_LAMP_NEW || exit 1
 
-# Ensure we're on main
 git checkout main
 git pull origin main
 
@@ -15,4 +14,4 @@ fi
 git add .
 git commit -m "$COMMIT_MSG"
 git push origin main
-echo "Pushed to main branch successfully!"
+echo "pushed to main branch"

@@ -1,6 +1,6 @@
 <?php
 //making this comment to test if the automation works
-$servername = "db"; // MySQL container name name inside docker-compose
+$servername = "db"; // MySQL container name name inside 
 $username = "root";
 $password = "mypassword";
 $dbname = "restaurant_db";

@@ -21,7 +21,6 @@ pipeline {
         stage('Stop Old Containers') {
             steps {
                 sh '''
-                    echo "Stopping any existing containers..."
                     docker-compose down || true
                 '''
             }
@@ -30,10 +29,7 @@ pipeline {
         stage('Build and Start Containers') {
             steps {
                 sh '''
-                    echo "Building and starting new containers..."
                     docker-compose up -d --build
-                    
-                    echo "Waiting for containers to initialize..."
                     sleep 30
                 '''
             }
@@ -42,65 +38,23 @@ pipeline {
         stage('Initialize Database') {
             steps {
                 sh '''
-                    echo "Initializing database..."
-                    
-                    # Use the CORRECT Jenkins-created container
-                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword -e "CREATE DATABASE IF NOT EXISTS restaurant_db;" || echo "Database creation failed"
-                    
-                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword restaurant_db -e "
-                        CREATE TABLE IF NOT EXISTS restaurants (
-                            id INT AUTO_INCREMENT PRIMARY KEY,
-                            name VARCHAR(100) NOT NULL,
-                            cuisine VARCHAR(50) NOT NULL,
-                            rating DECIMAL(3,1)
-                        );
-                    " || echo "Table creation failed"
-                    
-                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword restaurant_db -e "
-                        INSERT IGNORE INTO restaurants (name, cuisine, rating) VALUES
-                        ('Sushi Palace', 'Japanese', 4.5),
-                        ('Mama Mia Pizzeria', 'Italian', 4.2),
-                        ('Dragon Garden', 'Chinese', 4.0),
-                        ('Burger Haven', 'American', 4.3),
-                        ('Taco Fiesta', 'Mexican', 4.1);
-                    " || echo "Data insertion failed"
-                    
-                    echo "Database initialized!"
+                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword -e "CREATE DATABASE IF NOT EXISTS restaurant_db;"
+                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword restaurant_db -e "CREATE TABLE IF NOT EXISTS restaurants (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL, cuisine VARCHAR(50) NOT NULL, rating DECIMAL(3,1));"
+                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword restaurant_db -e "INSERT IGNORE INTO restaurants (name, cuisine, rating) VALUES ('Sushi Palace', 'Japanese', 4.5), ('Mama Mia Pizzeria', 'Italian', 4.2), ('Dragon Garden', 'Chinese', 4.0), ('Burger Haven', 'American', 4.3), ('Taco Fiesta', 'Mexican', 4.1);"
                 '''
             }
         }
         
-        stage('Test Database Connection') {
+        stage('Test Application') {
             steps {
                 sh '''
-                    echo "Testing PHP database connection..."
-                    docker exec restaurant-app-ci-www-1 php /var/www/html/testdb.php || echo "PHP test failed but continuing..."
-                    
-                    echo "Testing MySQL directly..."
-                    docker exec restaurant-app-ci-db-1 mysql -uroot -pmypassword restaurant_db -e "SELECT COUNT(*) as total_restaurants FROM restaurants;" || echo "MySQL query failed"
-                '''
-            }
-        }
-        
-        stage('Test Web Application') {
-            steps {
-                sh '''
-                    echo "Testing web application..."
-                    
-                    sleep 10
-                    
-                    # Test on the CORRECT port 8096 (not 8095)
+                    docker exec restaurant-app-ci-www-1 php /var/www/html/testdb.php
                     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8096/ || echo "000")
-                    echo "HTTP Status Code: $HTTP_CODE"
-                    
                     if [ "$HTTP_CODE" = "200" ]; then
-                        echo "✅ SUCCESS: Web application is running on port 8096!"
-                        echo "Access your app at: http://localhost:8096/"
+                        echo "Application deployed successfully"
                         exit 0
                     else
-                        echo "❌ FAILURE: Web application returned code $HTTP_CODE"
-                        echo "Debug info:"
-                        curl -v http://localhost:8096/ || true
+                        echo "Deployment failed"
                         exit 1
                     fi
                 '''
@@ -110,17 +64,7 @@ pipeline {
     
     post {
         always {
-            echo "=== Pipeline completed ==="
-            sh '''
-                echo "Final container status:"
-                docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-            '''
-        }
-        success {
-            echo "✅ Pipeline succeeded!"
-        }
-        failure {
-            echo "❌ Pipeline failed!"
+            sh 'docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
         }
     }
 }
